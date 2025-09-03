@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Home - SupportPortal{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <h1>Welcome to SupportPortal</h1>
+        <p>Your one-stop solution for managing support tickets.</p>
+        {% if current_user.is_authenticated %}
+            <p>Hello, {{ current_user.username }}!</p>
+            <a href="{{ url_for('main.submit_ticket') }}" class="btn btn-primary">Submit a Ticket</a>
+        {% else %}
+            <p>Please <a href="{{ url_for('auth.login') }}">login</a> or <a href="{{ url_for('auth.register') }}">register</a> to get started.</p>
+        {% endif %}
+    </div>
+    <div class="col-md-4">
+        <h3>Quick Stats</h3>
+        {% if current_user.is_authenticated and current_user.role == 'support' %}
+            <p>Total Tickets: {{ Ticket.query.count() }}</p>
+            <p>Open Tickets: {{ Ticket.query.filter_by(status='open').count() }}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
