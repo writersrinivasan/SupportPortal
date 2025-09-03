@@ -1,0 +1,110 @@
+name: SupportPortal CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, '3.10', '3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov flake8
+    
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test application startup
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from final_app import app
+        with app.test_client() as client:
+            response = client.get('/')
+            assert response.status_code == 200
+            print('✅ Application starts successfully')
+        "
+    
+    - name: Test database models
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from final_app import app, db, User, Ticket
+        with app.app_context():
+            db.create_all()
+            # Test user creation
+            user = User(username='test', email='test@test.com', role='client')
+            user.set_password('password')
+            db.session.add(user)
+            db.session.commit()
+            
+            # Test ticket creation
+            ticket = Ticket(title='Test', description='Test ticket', user_id=user.id)
+            db.session.add(ticket)
+            db.session.commit()
+            
+            assert User.query.count() == 1
+            assert Ticket.query.count() == 1
+            print('✅ Database models work correctly')
+        "
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+    
+    - name: Run security scan with bandit
+      run: |
+        bandit -r . -x ./venv/,./env/ || true
+    
+    - name: Check for known vulnerabilities
+      run: |
+        pip install -r requirements.txt
+        safety check || true
+
+  deploy:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build success notification
+      run: |
+        echo "🚀 SupportPortal build completed successfully!"
+        echo "✅ All tests passed"
+        echo "🔒 Security scan completed"
+        echo "📦 Ready for deployment"
